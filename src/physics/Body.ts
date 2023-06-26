@@ -1,28 +1,107 @@
 import type { Drawable } from '../interface'
-import type Vector2D from './Vector2D'
-import type Rect from './Rect'
+import type World from './World'
 
-export default abstract class Body implements Drawable {
-  position: Vector2D
-  velocity: Vector2D
-  acceleration: Vector2D
-  mass: number
+export interface BodySetup {
+  width?: number
+  height?: number
+  x?: number
+  y?: number
+  vx?: number
+  vy?: number
+  angularVector?: number
+  rotation?: number
+  friction?: number
+  mass?: number
+  color?: string
+  visible?: boolean
+}
 
-  constructor(
-    position: Vector2D,
-    velocity: Vector2D,
-    acceleration: Vector2D,
-    mass: number,
-  ) {
-    this.position = position
-    this.velocity = velocity
-    this.acceleration = acceleration
-    this.mass = mass
+export default class Body implements Drawable {
+  px: number
+  py: number
+  vx: number
+  vy: number
+  halfWidth: number
+  halfHeight: number
+  radius: number
+  angularVelocity: number
+  rotationAngle: number
+  cos: number
+  sin: number
+  friction: number
+  inverseMass: number
+  inverseInertia: number
+  dt: number
+  gravity: number
+  color: string
+  visible: boolean
+
+  constructor(world: World, setup: BodySetup = {}) {
+    const width = setup.width ?? 1.0
+    const height = setup.height ?? 1.0
+
+    this.px = setup.x ?? 0.0
+    this.py = setup.y ?? 0.0
+    this.vx = setup.vx ?? 0.0
+    this.vy = setup.vy ?? 0.0
+    this.halfWidth = width / 2
+    this.halfHeight = height / 2
+    this.radius = Math.sqrt(this.halfWidth * this.halfWidth + this.halfHeight * this.halfHeight)
+    this.angularVelocity = setup.angularVector ?? 0.0
+    this.rotationAngle = setup.rotation ?? 0.0
+
+    this.cos = Math.cos(this.rotationAngle)
+    this.sin = Math.sin(this.rotationAngle)
+
+    this.friction = setup.friction ?? world.friction
+    const mass = setup.mass ?? Infinity
+    this.color = setup.color ?? '#FFF'
+    this.visible = setup.visible ?? true
+
+    if (mass < Infinity) {
+      this.inverseMass = 1 / mass
+      this.inverseInertia = 12 / (mass * (width * width + height * height))
+    }
+    else {
+      this.inverseMass = 0
+      this.inverseInertia = 0
+    }
+
+    this.dt = world.timeStep
+    this.gravity = world.gravity
   }
 
-  // 충돌 감지를 위한 경계 상자를 반환하는 추상 메서드
-  abstract get boundingBox(): Rect
+  intergrate() {
+    if (!this.inverseMass)
+      return
 
-  // 물체를 그리는 추상 메서드
-  abstract draw(ctx: CanvasRenderingContext2D): void
+    this.px += this.vx * this.dt
+    this.py += this.vy * this.dt
+    this.rotationAngle += this.angularVelocity * this.dt
+    this.vy += this.gravity * this.dt
+
+    this.cos = Math.cos(this.rotationAngle)
+    this.sin = Math.sin(this.rotationAngle)
+  }
+
+  draw(ctx: CanvasRenderingContext2D): void {
+    if (!this.visible)
+      return
+
+    const chw = this.cos * this.halfWidth
+    const shw = this.sin * this.halfWidth
+    const chh = this.cos * this.halfHeight
+    const shh = this.sin * this.halfHeight
+
+    ctx.beginPath()
+
+    ctx.moveTo(this.px - chw - shh, this.py - shw + chh)
+    ctx.lineTo(this.px + chw - shh, this.py + shw + chh)
+    ctx.lineTo(this.px + chw + shh, this.py + shw - chh)
+    ctx.lineTo(this.px - chw + shh, this.py - shw - chh)
+
+    ctx.closePath()
+    ctx.fillStyle = this.color
+    ctx.stroke()
+  }
 }
